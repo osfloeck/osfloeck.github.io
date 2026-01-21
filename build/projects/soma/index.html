@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="build-hash" content="ea21039eda5e">
+    <meta name="build-hash" content="a6f81148c5f2">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>soma</title>
@@ -19,33 +19,127 @@
         
 <h1>soma</h1>
 
-<p><time datetime="2024-01-01 00:00:00">Monday, 1st January, 2024</time></p>
-<p>This is soma, static sites without the noise.</p>
-<h2>What I Built</h2>
-<ul>
-<li>Feature 1</li>
-<li>Feature 2</li>
-<li>Feature 3</li>
-</ul>
+<p><time datetime="2026-01-19 00:00:00">Monday, 19th January, 2026</time></p>
+<h2>Introduction</h2>
+<p>A static site generator (SSG) is a tool that transforms structured content (such as Markdown) into HTML. This greatly reduces the time and effort required to maintain a static site. For more information, see <a href="https://www.cloudflare.com/en-au/learning/performance/static-site-generator/">this article.</a></p>
+<p>The motivation for this project really stemmed from my disdain in using others. Previously, I had used <a href="https://jekyllrb.com/">Jekyll</a>, and then <a href="https://www.getzola.org/">Zola</a>, but I found the features overkill for my needs. This lead me to creating my own.</p>
+<h2>How Soma Works</h2>
+<p><strong><em>Soma</em></strong> is discovery based and category agnostic. The only frontmatter required in each page is the title and template. The tool generates a few basic templates and site content to get you started, showcasing the basic layout expected so you can begin adjusting how you like. Any additional frontmatter (such as date) is accessible in the templates. Date being tricky as it is is supported natively and the default templates show how they can be used.</p>
+<p>Below I&rsquo;ve included a basic visualisation of what site structure is required for <strong><em>Soma</em></strong> to work. As you can see, it follows a fairly simple convention of root pages existing in the root dir and categories having their own index.md.</p>
+<div class="codehilite"><table class="codehilitetable"><tr><td class="linenos"><div class="linenodiv"><pre><span class="normal">1</span>
+<span class="normal">2</span>
+<span class="normal">3</span>
+<span class="normal">4</span>
+<span class="normal">5</span>
+<span class="normal">6</span>
+<span class="normal">7</span>
+<span class="normal">8</span>
+<span class="normal">9</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="n">new</span><span class="o">-</span><span class="n">soma</span><span class="o">/</span>                   
+    <span class="n">index</span><span class="o">.</span><span class="n">md</span>            <span class="c1"># Required</span>
+    <span class="n">contact</span><span class="o">.</span><span class="n">md</span>          
+    <span class="n">blog</span><span class="o">/</span>               
+        <span class="n">index</span><span class="o">.</span><span class="n">md</span>        <span class="c1"># Required    </span>
+        <span class="n">first</span><span class="o">-</span><span class="n">post</span><span class="o">.</span><span class="n">md</span>   
+    <span class="n">projects</span><span class="o">/</span>           
+        <span class="n">index</span><span class="o">.</span><span class="n">md</span>        <span class="c1"># Required  </span>
+        <span class="n">first</span><span class="o">-</span><span class="n">proj</span><span class="o">.</span><span class="n">md</span>
+</code></pre></div></td></tr></table></div>
+
+<p>An important feature of the SSG was the ability for templates to be able to automatically access items for each category. For instance, the blog index page should be able to show all blog posts (slices in future). <strong><em>Soma</em></strong> handles this for you, with each category template injected with <code>items</code>. The code block below showcases how to use this in the category template.</p>
+<blockquote>
+<p><code>{% for item in items | sort(attribute="rank") %}</code></p>
+</blockquote>
+<h2>1. Clean URLs: From <code>.html</code> to Folders</h2>
+<p>Shortly after I got the basic functionality working, the first thing I wanted to do was adjust the url structure of the category items.</p>
+<p>The initial implementation had links looking like follows.</p>
+<blockquote>
+<p><code>my-site.com/blog/first-post.html</code></p>
+</blockquote>
+<p>To be clear, there is nothing wrong with this. I just thought it&rsquo;d look nicer if the items were accessible without the .html extension so I could access items for each category at links like follows.</p>
+<blockquote>
+<p><code>my-site.com/blog/first-post</code></p>
+</blockquote>
+<p>Doing this was not too difficult. Most traditional static file web servers (such as Apache or Nginx) when processing a request at &lsquo;/&rsquo; look for a index.html file or something rather internally. i.e. <code>my-site.com/</code> resolves to the <code>index.html</code> sitting at the root. </p>
+<p>You can take a look at <a href="https://nginx.org/en/docs/http/ngx_http_index_module.html">ngix&rsquo;s implementation here</a> to see what I mean.</p>
+<p>This is also the case for folders within the build contents. So all we needed to do was adjust the build process to ensure each item is instead created as a directory, and within that the built html as <code>index.html</code>.</p>
+<h2>2. The Typing Dilemma</h2>
+<p>Initially when I created a few basic interfaces of the markdown pages I had setup rather strict requirements.</p>
+<div class="codehilite"><table class="codehilitetable"><tr><td class="linenos"><div class="linenodiv"><pre><span class="normal">1</span>
+<span class="normal">2</span>
+<span class="normal">3</span>
+<span class="normal">4</span>
+<span class="normal">5</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">MarkdownPageBase</span><span class="p">(</span><span class="n">TypedDict</span><span class="p">):</span>
+    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">template</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">date</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">content</span><span class="p">:</span> <span class="nb">str</span>
+</code></pre></div></td></tr></table></div>
+
+<p>It later dawned on me while using the tool for my site that I don&rsquo;t really care what the frontmatter of each markdown pages is. All I really needed was the <code>template</code> and <code>title</code>. This could have been further simplified to just <code>template</code>.</p>
+<p>However as I began to flesh out more of the tools functionality I got lost in the weeds a little with union returns and such (due to certain pages requiring some fields and others not) which overall made the program unnecessarily messy.</p>
+<p>This led me to simplify the interface. The tool only requires that each markdown page contains in its frontmatter the <code>template</code> and the <code>title</code>. </p>
+<p>I am sure there are probably better ways of doing this. But given I wanted the tool to only be as &lsquo;complex as needed&rsquo; for each use case, I decided to make it very minimal.</p>
+<p>This is my second time working with typed items and its interesting. I really like the linting it provides and how I can be sure of somewhat expected behaviour. But I don&rsquo;t like how in a small project like this one I would need to likely create a separate class for a markdown page where date is required and I do not see the point in spending time to do this for this scale of project. Something to think about.</p>
+<p>Something else I was wondering. How much time I have spent thinking about type safety? Is this really the best use of my time? Sure, it may be more loosey goosey but why does it feel like I have contracted TypeScript.</p>
+<h2>3. Live Reload</h2>
+<p>Initially I had simply used the livereload module. But after some thought I felt there was a simpler solution. I also felt this was an opportunity to learn. </p>
+<p>After a little thought I decided to implement it like follows. Each time I build, I write to a file <code>.build-info.json</code> that contains the build time and hash. I also inject a script in dev mode into each page that contains a build hash. </p>
+<div class="codehilite"><table class="codehilitetable"><tr><td class="linenos"><div class="linenodiv"><pre><span class="normal">1</span>
+<span class="normal">2</span>
+<span class="normal">3</span>
+<span class="normal">4</span>
+<span class="normal">5</span>
+<span class="normal">6</span>
+<span class="normal">7</span>
+<span class="normal">8</span>
+<span class="normal">9</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="kd">const</span><span class="w"> </span><span class="nx">currentHash</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">document</span><span class="p">.</span><span class="nx">querySelector</span><span class="p">(</span><span class="s1">&#39;meta[name=&quot;build-hash&quot;]&#39;</span><span class="p">).</span><span class="nx">content</span><span class="p">;</span>
+<span class="w">    </span><span class="nx">setInterval</span><span class="p">(</span><span class="k">async</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">response</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">fetch</span><span class="p">(</span><span class="s1">&#39;/.build-info.json&#39;</span><span class="p">);</span>
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">buildInfo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">response</span><span class="p">.</span><span class="nx">json</span><span class="p">();</span>
+
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">buildInfo</span><span class="p">.</span><span class="nx">hash</span><span class="w"> </span><span class="o">!==</span><span class="w"> </span><span class="nx">currentHash</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="nx">location</span><span class="p">.</span><span class="nx">reload</span><span class="p">();</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">},</span><span class="w"> </span><span class="mf">1000</span><span class="p">);</span>
+</code></pre></div></td></tr></table></div>
+
+<p>As you can see above, it is fairly straightforward. Every second I check to see if the build hash on the page matches that of the build hash in the written file. If we detect a difference, we refresh the page.</p>
+<p>There&rsquo;s obviously a lot of room for improvement here. The next logical step would be to build out a data structure to manage the state of each page and its dependencies to optimise the live reload but that would require a lot more work and I think I got out of it what I wanted in avoiding using livereload and a websocket in the first place.</p>
+<h2>4. File Paths</h2>
+<p>During implementation, an interesting technical challenge I faced was how to ensure I copy assets over to new instances in different environments. If I used standard filesystem paths such as <code>~/Lab/soma/fonts</code>, the Python package might be distributed in a variety of formats where the files may not exist as regular filesystem objects at runtime. The code below demonstrates a little more clearly.</p>
+<div class="codehilite"><table class="codehilitetable"><tr><td class="linenos"><div class="linenodiv"><pre><span class="normal">1</span>
+<span class="normal">2</span>
+<span class="normal">3</span>
+<span class="normal">4</span>
+<span class="normal">5</span>
+<span class="normal">6</span>
+<span class="normal">7</span>
+<span class="normal">8</span>
+<span class="normal">9</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">copy_default_fonts</span><span class="p">(</span><span class="n">font_path</span><span class="p">:</span> <span class="n">Path</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Copy default fonts from package&quot;&quot;&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">with</span> <span class="n">resources</span><span class="o">.</span><span class="n">as_file</span><span class="p">(</span><span class="n">resources</span><span class="o">.</span><span class="n">files</span><span class="p">(</span><span class="s1">&#39;soma.fonts&#39;</span><span class="p">))</span> <span class="k">as</span> <span class="n">font_dir</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">font</span> <span class="ow">in</span> <span class="n">font_dir</span><span class="o">.</span><span class="n">iterdir</span><span class="p">():</span>
+                <span class="k">if</span> <span class="n">font</span><span class="o">.</span><span class="n">is_file</span><span class="p">():</span>
+                    <span class="n">shutil</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">font</span><span class="p">,</span> <span class="n">font_path</span> <span class="o">/</span> <span class="n">font</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;soma (error: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+
+<p>If you take a look at line 4 you will see <code>resources.as_file</code> being called. By using this approach instead of a filesystem path we ensure that the resources can be reliably accessed regardless of how the package is installed or executed.</p>
+<h2>5. Development Process w/ LLM&rsquo;s</h2>
+<p>During the initial development of this tool I consulted with a few LLM&rsquo;s to get an idea of what the project should look like. This helped greatly. I did have a look at a few existing repo&rsquo;s but most were extremely extensive and complicated (to me) pieces of software. Using the LLM&rsquo;s I was able to extract the common denominator operations my SSG should perform and from there I was able to implement each part as I liked.</p>
+<p>Something I did notice that bugged me however was the LLM&rsquo;s tendency to couple everything really tightly. I can see how this is quite efficient, but to me it didn&rsquo;t seem very readable/understandable. I started to instead when encountering rather troublesome bugs to just ask it to provide a text response to the problem areas so I could make better sense of the problem myself. I do not want to waste time learning how the LLM wrote a complicated solution to something that in reality was pretty simple to fix.</p>
+<h2>6. Project Structure</h2>
+<p>Recently I&rsquo;ve noticed a trend towards keeping all your code within as few files as possible. I was pretty against this early days in my programming journey but the more I try to adhere to this the more sense it makes. Whenever I need to find a function I simply CTRL-F and I know its somewhere in the file. It&rsquo;s also allegedly faster although I am yet to test this for myself. I think I used to over modularise. I still split out things as needed, but only when I feel it absolutely necessary.</p>
+<h2>Summary</h2>
+<p>This project was an excellent exercise for myself to get more familiar with web technologies, tooling and python. Some other unexpected discoveries along the way such as how I interact with LLM&rsquo;s and what my development process is like were welcome.</p>
+<p>In future, I will port this to C for speed and to get more familiar with C. From here I will look to optimising build and providing slices to items for categories for larger, more complex sites.</p>
 
     </div>
     <footer>
         <p>Nobody ever figures out what life is all about, and it doesn't matter. Explore the world. Nearly everything is really interesting if you go into it deeply enough. — Richard P. Feynman</p>
     </footer>
-    
-    <script>
-        
-    const currentHash = document.querySelector('meta[name="build-hash"]').content;
-    setInterval(async () => {
-        const response = await fetch('/.build-info.json');
-        const buildInfo = await response.json();
-        
-        if (buildInfo.hash !== currentHash) {
-            location.reload();
-        }
-    }, 1000);
-
-    </script>
     
 </body>
 </html>
