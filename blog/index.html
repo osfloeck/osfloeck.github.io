@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="build-hash" content="ea21039eda5e">
+    <meta name="build-hash" content="a6f81148c5f2">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Blog</title>
@@ -18,11 +18,9 @@
     <div class="content">
         
 <h1>Blog</h1>
-<p>Here you'll find my latest thoughts and updates.</p>
+<p>Here you&rsquo;ll find my latest thoughts and updates.</p>
 <h2>Recent Content</h2>
 <ul>
-
-    <li><a href="/blog/first-post">Hello, world.</a> - Monday, 15th December, 2025</li>
 
 </ul>
 
@@ -30,20 +28,6 @@
     <footer>
         <p>Nobody ever figures out what life is all about, and it doesn't matter. Explore the world. Nearly everything is really interesting if you go into it deeply enough. — Richard P. Feynman</p>
     </footer>
-    
-    <script>
-        
-    const currentHash = document.querySelector('meta[name="build-hash"]').content;
-    setInterval(async () => {
-        const response = await fetch('/.build-info.json');
-        const buildInfo = await response.json();
-        
-        if (buildInfo.hash !== currentHash) {
-            location.reload();
-        }
-    }, 1000);
-
-    </script>
     
 </body>
 </html>
