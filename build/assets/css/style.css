@@ -70,7 +70,18 @@ nav a:hover {
 	color: darkblue;
 }
 
+/* Misc */
+img {
+	max-width: 100%;
+	height: auto;
+}
+
 /* Content */
+.post-header {
+	text-align: center;
+	margin-bottom: 2rem;
+}
+
 .content {
 	margin-bottom: 2rem;
 	min-height: 100vh;
@@ -84,18 +95,22 @@ nav a:hover {
 
 .content h2 {
 	font-size: 1.2rem;
-	margin: 1.5rem 0 1rem 0;
+	margin: 1.5rem 0 0.2rem 0;
 	color: #333;
 }
 
 .content h3 {
 	font-size: 1rem;
-	margin: 0 0 0.75rem 0;
+	margin: 1.5rem 0 0.75rem 0;
 	color: #444;
 }
 
+.post-header h3 {
+	margin: 0.5rem 0 1rem 0;
+}
+
 .content p {
-	margin-bottom: 1rem;
+	margin-bottom: 0.7rem;
 }
 
 .content blockquote p {
@@ -105,7 +120,7 @@ nav a:hover {
 .content ul,
 .content ol {
 	margin: 1rem 0;
-	padding-left: 2rem;
+	padding-left: 1rem;
 }
 
 .content li {
@@ -126,38 +141,68 @@ time {
 }
 
 /* Projects */
+.projects {
+	margin-top: 2rem;
+}
+
+.project {
+	margin-bottom: 1.5rem;
+}
+
 .project-header {
 	display: flex;
 	align-items: center;
 	gap: 0.5rem;
 }
 
+.project-title {
+	font-size: 1.15rem;
+}
+
+.project-title:hover {
+	text-decoration: underline;
+}
+
+.project-tags .tag {
+    padding: 0;
+    border-radius: 0;
+    font-size: 0.9rem;
+    margin-right: 0.2rem;
+	color: #21201a;
+}
+
 /* Footer */
 footer {
-	display: flex;
-	width: auto;
-	justify-content: center;
-	padding: 2rem 0;
-	text-align: center;
-	font-size: 0.85rem;
-	color: #545454;
+  margin-top: 3rem;
+  margin-bottom: 3rem;
+  padding: 3rem 0 3rem 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  font-size: 0.85rem;
+  font-style: italic;
+  color: #272727;
+  background: #f9f5d7;
+}
+
+footer::before {
+  content: "* * *";
+  display: block;
+  margin-bottom: 1.5rem;
+  font-style: normal;
+  letter-spacing: 0.5em;
+  color: #000;
 }
 
 footer p {
-	width: 80%;
-	margin: 0;
-}
-
-.foot-note {
-	font-weight: 600;
-	font-size: small;
-	padding-bottom: 5px;
+  width: 80%;
+  margin: 0;
 }
 
 blockquote {
-    padding: 0px 6px;
+    padding: 0px 6px 0px 12px;
     margin: 6px 0px 12px 0px;
-    border-left: 3px solid #d0cccc;
     background-color: #f7f7f7;
     border-radius: 2px;
 }

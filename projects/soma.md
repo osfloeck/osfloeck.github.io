@@ -1,136 +1,199 @@
 ---
-title: "soma"
-template: "content"
-date: "2026-01-19"
-tags: ["python", "ssg"]
+title: "Soma"
+template: "content.html"
+date: "2026-02-05"
+tags: ["odin", "http", "cli"]
 categories: ["web"]
-desc: "A lightweight SSG (built this site)"
+desc: "A lightweight SSG (builds this site)"
 github_url: "https://github.com/floeckdev/soma"
-rank: 1
+sub_title: "Rewriting a Static Site Generator in Odin"
 ---
 
-## Introduction
+Soma is a lightweight static site generator (SSG) that I originally wrote in Python and later rewrote in Odin. It also happens to be the software responsible for building this website.
 
-A static site generator (SSG) is a tool that transforms structured content (such as Markdown) into HTML. This greatly reduces the time and effort required to maintain a static site. For more information, see [this article.](https://www.cloudflare.com/en-au/learning/performance/static-site-generator/)
+The rewrite started as an opportunity to explore a language that was unfamiliar to me, particularly its approach to memory management, data structures and systems programming.
 
-The motivation for this project really stemmed from my disdain in using others. Previously, I had used [Jekyll](https://jekyllrb.com/), and then [Zola](https://www.getzola.org/), but I found the features overkill for my needs. This lead me to creating my own.
+Along the way, I found myself reconsidering some of my assumptions about software design, learning more about how web servers operate and discovering that seemingly simple features can involve surprising amounts of work.
 
-## How Soma Works
+In the following, I talk about some of the decisions I found interesting, what I learned, and what I'd approach differently.
 
-***Soma*** is discovery based and category agnostic. The only frontmatter required in each page is the title and template. The tool generates a few basic templates and site content to get you started, showcasing the basic layout expected so you can begin adjusting how you like. Any additional frontmatter (such as date) is accessible in the templates. Date being tricky as it is is supported natively and the default templates show how they can be used.
+## 1. Why Odin?
 
-Below I've included a basic visualisation of what site structure is required for ***Soma*** to work. As you can see, it follows a fairly simple convention of root pages existing in the root dir and categories having their own index.md.
+I ended up choosing Odin for the rewrite for a few reasons. Mainly, I wanted to become more familiar with lower-level programming while still enjoying some modern language features. Odin appealed to me for its clean syntax, type inference, built-in string views and sensible approach to memory management through explicit `allocators` and `defer`. Rewriting Soma rather than starting something new also meant I could focus on learning the language while working with a problem I already understood.
 
-```python
-new-soma/                   
-    index.md            # Required
-    contact.md          
-    blog/               
-        index.md        # Required    
-        first-post.md   
-    projects/           
-        index.md        # Required  
-        first-proj.md
-```
+Coming from Python, one of the biggest adjustments was having to think more carefully about memory allocation, ownership and lifetime. Although I don't handle this well currently in Soma, it was something at the very least I needed to consider.
 
-An important feature of the SSG was the ability for templates to be able to automatically access items for each category. For instance, the blog index page should be able to show all blog posts (slices in future). ***Soma*** handles this for you, with each category template injected with `items`. The code block below showcases how to use this in the category template.
-
-> `{% for item in items | sort(attribute="rank") %}`
-
-## 1. Clean URLs: From `.html` to Folders
-
-Shortly after I got the basic functionality working, the first thing I wanted to do was adjust the url structure of the category items.
-
-The initial implementation had links looking like follows.
-
-> `my-site.com/blog/first-post.html`
-
-To be clear, there is nothing wrong with this. I just thought it'd look nicer if the items were accessible without the .html extension so I could access items for each category at links like follows.
-
-> `my-site.com/blog/first-post`
-
-Doing this was not too difficult. Most traditional static file web servers (such as Apache or Nginx) when processing a request at '/' look for a index.html file or something rather internally. i.e. `my-site.com/` resolves to the `index.html` sitting at the root. 
-
-You can take a look at [ngix's implementation here](https://nginx.org/en/docs/http/ngx_http_index_module.html) to see what I mean.
-
-This is also the case for folders within the build contents. So all we needed to do was adjust the build process to ensure each item is instead created as a directory, and within that the built html as `index.html`.
-
-## 2. The Typing Dilemma
-
-Initially when I created a few basic interfaces of the markdown pages I had setup rather strict requirements.
+I also wanted to understand more of the machinery involved in serving a website. Writing my own HTTP server, rather than relying entirely on an existing framework, gave me an opportunity to explore what it actually means to serve content. In Python I only needed to write a line:
 
 ```python
-class MarkdownPageBase(TypedDict):
-    title: str
-    template: str
-    date: str
-    content: str
+python3 -m http.serve
 ```
 
-It later dawned on me while using the tool for my site that I don't really care what the frontmatter of each markdown pages is. All I really needed was the `template` and `title`. This could have been further simplified to just `template`.
+And this was all you really needed. Whereas in Odin I needed to handle a lot more; sockets, accepting clients and handling headers. Everything was there for you to play around with! Very cool but also daunting.
 
-However as I began to flesh out more of the tools functionality I got lost in the weeds a little with union returns and such (due to certain pages requiring some fields and others not) which overall made the program unnecessarily messy.
+## 2. Working with the filesystem and memory
 
-This led me to simplify the interface. The tool only requires that each markdown page contains in its frontmatter the `template` and the `title`. 
+### 2.1 Walking directories
 
-I am sure there are probably better ways of doing this. But given I wanted the tool to only be as 'complex as needed' for each use case, I decided to make it very minimal.
+One small discovery that stuck with me involved Odin's filesystem walker.
 
-This is my second time working with typed items and its interesting. I really like the linting it provides and how I can be sure of somewhat expected behaviour. But I don't like how in a small project like this one I would need to likely create a separate class for a markdown page where date is required and I do not see the point in spending time to do this for this scale of project. Something to think about.
+While reading the documentation and exploring the language server's autocomplete suggestions, I came across a useful function:
 
-Something else I was wondering. How much time I have spent thinking about type safety? Is this really the best use of my time? Sure, it may be more loosey goosey but why does it feel like I have contracted TypeScript.
-
-## 3. Live Reload
-
-Initially I had simply used the livereload module. But after some thought I felt there was a simpler solution. I also felt this was an opportunity to learn. 
-
-After a little thought I decided to implement it like follows. Each time I build, I write to a file `.build-info.json` that contains the build time and hash. I also inject a script in dev mode into each page that contains a build hash. 
-
-```javascript
-const currentHash = document.querySelector('meta[name="build-hash"]').content;
-    setInterval(async () => {
-        const response = await fetch('/.build-info.json');
-        const buildInfo = await response.json();
-        
-        if (buildInfo.hash !== currentHash) {
-            location.reload();
-        }
-    }, 1000);
+```
+os.walker_skip_dir(&w)
 ```
 
-As you can see above, it is fairly straightforward. Every second I check to see if the build hash on the page matches that of the build hash in the written file. If we detect a difference, we refresh the page.
+During a build, Soma traverses the site's source directory to discover content. However, the generated build directory may also exist inside that directory. Rather than entering the build directory and checking every file to determine whether it should be ignored, I could skip the entire directory before descending into it.
 
-There's obviously a lot of room for improvement here. The next logical step would be to build out a data structure to manage the state of each page and its dependencies to optimise the live reload but that would require a lot more work and I think I got out of it what I wanted in avoiding using livereload and a websocket in the first place.
+And look, this is probably not that significant to most of you. It's a small optimisation, but one that made the intent of the code clearer and eliminated unnecessary filesystem traversal. But I still found it really interesting; the fact that people that built these tools and functions thought about many use cases users would need!
 
-## 4. File Paths
+Interestingly, this **wasn't something any of the LLM-generated suggestions I'd encountered had proposed.** This is likely something to do with Odin being relatively sparse part of their training data. In any case, it was a useful reminder of the value of exploring a language's standard library myself
 
-During implementation, an interesting technical challenge I faced was how to ensure I copy assets over to new instances in different environments. If I used standard filesystem paths such as `~/Lab/soma/fonts`, the Python package might be distributed in a variety of formats where the files may not exist as regular filesystem objects at runtime. The code below demonstrates a little more clearly.
+### 2.2 Memory allocation and lifetime
 
-```python
-def copy_default_fonts(font_path: Path):
-    """Copy default fonts from package"""
-    try:
-        with resources.as_file(resources.files('soma.fonts')) as font_dir:
-            for font in font_dir.iterdir():
-                if font.is_file():
-                    shutil.copy(font, font_path / font.name)
-    except Exception as e:
-        print(f"soma (error: {e}")
+Memory management was one of the biggest differences between the original Python version and the Odin rewrite.
+
+Throughout development, I frequently relied on `context.allocator`. This was convenient, particularly while I was still becoming familiar with the language, but it also meant I wasn't always being deliberate about allocation lifetimes. In hindsight, I definitely should have thought more about allocation strategy earlier in the project.
+
+One possible improvement would be using arenas for particular operations, such as a complete build or intermediate rendering stages, where groups of allocations could be discarded together. The next time I work on this project, this is one of the first things I will be addressing.
+
+## 3. Building the templating system
+
+### 3.1 Rebuilding rather than modifying
+
+One interesting decision came up while implementing template inheritance.
+
+When resolving a child template, I needed to replace blocks in the parent template's abstract syntax tree (AST) with the corresponding content from the child.
+
+One option was to modify the existing array of nodes directly, inserting and removing elements as necessary.
+
+For example, replacing part of:
+
+```
+[block_1, block_4, block_5]
 ```
 
-If you take a look at line 4 you will see `resources.as_file` being called. By using this approach instead of a filesystem path we ensure that the resources can be reliably accessed regardless of how the package is installed or executed.
+with:
 
-## 5. Development Process w/ LLM's
+```
+[block_1, block_2, block_3, block_4, block_5]
+```
 
-During the initial development of this tool I consulted with a few LLM's to get an idea of what the project should look like. This helped greatly. I did have a look at a few existing repo's but most were extremely extensive and complicated (to me) pieces of software. Using the LLM's I was able to extract the common denominator operations my SSG should perform and from there I was able to implement each part as I liked.
+Instead, I opted to construct a new sequence of nodes during traversal. This avoided writing additional helpers for shifting and inserting elements into existing arrays. More importantly, I found the resulting code easier to follow and maintain.
 
-Something I did notice that bugged me however was the LLM's tendency to couple everything really tightly. I can see how this is quite efficient, but to me it didn't seem very readable/understandable. I started to instead when encountering rather troublesome bugs to just ask it to provide a text response to the problem areas so I could make better sense of the problem myself. I do not want to waste time learning how the LLM wrote a complicated solution to something that in reality was pretty simple to fix.
+It was a useful example of how modifying an existing structure isn't necessarily simpler than rebuilding it, even if rebuilding initially sounds less efficient.
 
-## 6. Project Structure
+### 3.2 Temporary data versus the registry
 
-Recently I've noticed a trend towards keeping all your code within as few files as possible. I was pretty against this early days in my programming journey but the more I try to adhere to this the more sense it makes. Whenever I need to find a function I simply CTRL-F and I know its somewhere in the file. It's also allegedly faster although I am yet to test this for myself. I think I used to over modularise. I still split out things as needed, but only when I feel it absolutely necessary.
+Another decision arose while implementing loop rendering in `_render_for`.
 
-## Summary
+Soma maintains a registry of page-level information that can be referenced during rendering. However, loops also introduce temporary variables representing the current item.
 
-This project was an excellent exercise for myself to get more familiar with web technologies, tooling and python. Some other unexpected discoveries along the way such as how I interact with LLM's and what my development process is like were welcome.
+```
+render_for(node, page, scope):
+    create child scope
+    parse loop variable and collection
+    resolve collection
 
-In future, I will port this to C for speed and to get more familiar with C. From here I will look to optimising build and providing slices to items for categories for larger, more complex sites.
+    if collection is undefined:
+        report error
+
+    for each item in collection:
+        bind item to loop variable in child scope
+        render loop body using child scope
+```
+
+Initially, I wondered whether these values should be stored in the registry as well. After some time, I realised they served a different purpose. Registry entries represent persistent page-level information, whereas loop variables are temporary/ephemeral and only meaningful within their rendering scope.
+
+Keeping them in local scope avoided unnecessarily expanding the registry and better reflected their intended lifetime. This also highlighted the importance of distinguishing data by its purpose rather than treating every accessible value as belonging to the same structure.
+
+### 3.3. When is a helper worth writing?
+
+A recurring question throughout the rewrite was whether small pieces of repeated logic justified their own helper functions. I often found myself choosing between creating another abstraction or leaving a small amount of duplication in place. I generally leaned towards keeping related logic together, particularly when introducing a helper would require jumping between functions to understand a relatively simple operation.
+
+I don't think I've found the ideal balance yet. Repetition can make code harder to maintain, but abstraction also carries a cost, especially when it obscures the underlying behaviour.
+
+## 4. Frontmatter, data models and errors
+
+### 4.1 Keeping frontmatter simple
+
+Soma uses a YAML-inspired frontmatter format rather than implementing the entire YAML specification.
+
+It supports a small set of types:
+
+```
+Strings   "Hello, world."
+Arrays    ["Hello", ", ", "world."]
+Integers  0-9
+Booleans  true, false
+Dates     2026-12-12
+```
+
+This covers the information I currently need to describe pages, such as their titles, templates, dates and tags.
+
+The main reason I decided against full YAML support was discovering just how complicated YAML parsing can be. I came across a [Twitter post by gingerBill](https://x.com/TheGingerBill/status/1861401720581922832), the creator of Odin, discussing the possibility of adding YAML support to the language. His comment *“its header file is over 9000 lines of code”* was enough to convince me that implementing a small subset of YAML was more than sufficient for Soma's needs.
+
+
+### 4.2 Defining types too early
+
+During development, I noticed a tendency to introduce structures before I fully understood how the information would be used. Dates were one example. I began implementing my own representation for parsed dates, only to discover later that Odin already provided useful date-related functionality. In retrospect, I could have spent more time understanding the available standard library before designing my own solution.
+
+I also found myself tempted to reuse existing structures in places where they weren't quite appropriate. For example, during the final stages of building a site, I considered reusing my Page type because it already contained much of the information I needed. However, several fields would have been unused or meaningless.
+
+I eventually introduced a separate Build_Context type. Although this meant having another structure, it more accurately represented the information required for that operation.
+
+These experiences made me reconsider when to introduce a new type and when to keep a simpler representation until the requirements become clearer.
+
+### 4.3 Providing useful error messages
+
+One problem I encountered was maintaining enough context to produce helpful error messages.
+
+When a failure occurred deep within frontmatter parsing or template processing, the function detecting the error didn't necessarily know which source file was being processed. I considered introducing shared state to track the current file, avoiding the need to pass diagnostic information through several layers of functions.
+
+However, global state introduces its own problems, particularly when operations become more complex or need to run independently.
+
+This is something I will likely revisit at a later date.
+
+## 5. Markdown and the little surprises
+
+### 5.1 Code blocks and syntax highlighting
+
+Towards the end of the rewrite, I discovered that styling Markdown code blocks wasn't quite as straightforward as I'd expected.
+
+Soma uses `md4c` to convert Markdown into HTML. For a fenced code block, the output looks roughly like this:
+
+```html
+<pre><code class="language-odin">main :: proc() {
+    fmt.println(&quot;hi&quot;) // greet
+}
+</code></pre>
+```
+
+This is perfectly reasonable HTML, but it doesn't distinguish keywords, comments or other syntax elements. Initially, I explored post-processing these blocks myself. This involved traversing the generated HTML, identifying code blocks and inserting additional markup. However, syntax highlighting quickly becomes complicated once different programming languages and their individual syntax rules are involved.
+
+Rather than maintaining my own highlighting implementation, I eventually decided to use Highlight.js. It handles the language-specific work, while Soma remains responsible for generating the page itself.
+
+This was a good reminder that not every problem benefits from a custom implementation, particularly when the problem sits outside the project's main purpose.
+
+### 5.2 Typography and quotation marks
+
+Another small surprise involved quotation marks.
+
+I wanted Markdown text to support typographic quotation marks, such as converting straight quotes into curly opening and closing quotes where appropriate. However, to my surprise, md4c doesn't automatically perform this transformation.
+
+I considered adding an HTML post-processing step or switching to a Markdown implementation that supported this behaviour.. but for now, I've left it alone. It wasn't worth introducing additional processing complexity for what is largely a presentational detail.
+
+Interestingly, both this and the code highlighting issue showed me how much work can sit behind seemingly trivial formatting features.
+
+## 6. Reflections
+
+Rewriting Soma in Odin has been a useful exercise in understanding what happens beneath the abstractions I was accustomed to working with in Python.
+
+I've had to think more carefully about memory, data lifetime, filesystem operations and how to organise internal structures without introducing unnecessary complexity.
+
+It's also challenged my tendency to design abstractions too early. Several times, the simpler solution only became obvious after I'd spent time exploring something more complicated.
+
+Perhaps the biggest lesson has been that knowing what not to implement is just as important as knowing how to implement it.
+
+Soma remains a relatively small project, and that's intentional. I want it to stay simple enough that I can understand and maintain it myself, while remaining useful for building this website.
+

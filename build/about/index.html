@@ -1,12 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="build-hash" content="a6f81148c5f2">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>About</title>
     <link rel="stylesheet" href="/assets/css/style.css">
     <link rel="stylesheet" href="/assets/css/pygments.css">
+    <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.12.0/build/styles/grayscale.min.css"
+    >
 </head>
 <body>
     <nav>
@@ -18,20 +21,41 @@
     <div class="content">
         
 <h1>About</h1>
-<p>I’m a final-year Computer Science student looking for a full-time data-focused role beginning in late 2026. <a href="">Attached, my resume.</a></p>
-<p>I&rsquo;m particularly interested in data analysis, modelling, and building tools that make complex information easier to reason about. Aside from programming, I also love to read (currently deep in the Red Rising series by Pierce Brown), play guitar, and occasionally write.</p>
+<p>I’m a recent Computer Science graduate looking for a full-time Junior Developer role beginning in late 2026, early 2027. <a href="/assets/cv.pdf">Click here</a> to view my resume.</p>
+<p>I&#x27;m particularly interested in building tools that make complex information easier to reason about. Aside from programming, I also love to read (currently <a href="https://www.google.com/search?q=McDonald%27s+Behind+The+Arches"><em>McDonald&#x27;s: Behind The Arches</em></a> by John F. Love), play guitar, and occasionally write.</p>
 <ul>
-<li><strong>Languages:</strong> Python, C, C++, Java</li>
-<li><strong>Databases:</strong> MySQL, SQLite, MongoDB</li>
-<li><strong>Data &amp; Analysis:</strong> Pandas, NumPy, Jupyter, Deepnote</li>
-<li><strong>Web:</strong> React &amp; Next.js, TypeScript, Tailwind CSS, Vanilla</li>
-<li><strong>Systems:</strong> CLI Tooling, Emulation (CHIP-8 &amp; Intel 8086)</li>
+<li><strong>Languages:</strong> Odin, C/C++, Python, Java, TypeScript</li>
+<li><strong>Web &amp; Backend:</strong> React, Next.js, Express, REST/GraphQL APIs</li>
+<li><strong>Data:</strong> SQLite, PostgreSQL, MongoDB</li>
+<li><strong>Tools:</strong> Git, Supabase, Docker, Bruno</li>
 </ul>
+
 
     </div>
     <footer>
         <p>Nobody ever figures out what life is all about, and it doesn't matter. Explore the world. Nearly everything is really interesting if you go into it deeply enough. — Richard P. Feynman</p>
     </footer>
-    
-</body>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.12.0/build/highlight.min.js"></script>
+    <script>
+        hljs.highlightAll();
+    </script>
+<script>
+(function () {
+    let knownGen = null;
+    async function checkForRebuild() {
+        try {
+            const response = await fetch("/soma-reload", { cache: "no-store" });
+            const currentGen = await response.text();
+
+            if (knownGen === null) {
+                knownGen = currentGen;
+            } else if (knownGen !== currentGen) {
+                location.reload();
+            }
+        } catch {} 
+    }
+    checkForRebuild();
+    setInterval(checkForRebuild, 1000);
+})();
+</script></body>
 </html>

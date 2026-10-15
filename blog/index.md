@@ -1,6 +1,6 @@
 ---
 title: "Blog"
-template: "category"
+template: "category.html"
 ---
 
 Here you'll find my latest thoughts and updates.

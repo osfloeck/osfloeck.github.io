@@ -1,12 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="build-hash" content="{{ build_hash }}">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ title }}</title>
     <link rel="stylesheet" href="/assets/css/style.css">
     <link rel="stylesheet" href="/assets/css/pygments.css">
+    <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.12.0/build/styles/grayscale.min.css"
+    >
 </head>
 <body>
     <nav>
@@ -21,10 +24,9 @@
     <footer>
         <p>Nobody ever figures out what life is all about, and it doesn't matter. Explore the world. Nearly everything is really interesting if you go into it deeply enough. — Richard P. Feynman</p>
     </footer>
-    {% if dev_mode %}
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.12.0/build/highlight.min.js"></script>
     <script>
-        {{ inject_script | safe }}
+        hljs.highlightAll();
     </script>
-    {% endif %}
 </body>
 </html>
