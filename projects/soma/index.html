@@ -1,12 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="build-hash" content="a6f81148c5f2">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>soma</title>
+    <title>Soma</title>
     <link rel="stylesheet" href="/assets/css/style.css">
     <link rel="stylesheet" href="/assets/css/pygments.css">
+    <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.12.0/build/styles/grayscale.min.css"
+    >
 </head>
 <body>
     <nav>
@@ -17,129 +20,142 @@
     </nav>
     <div class="content">
         
-<h1>soma</h1>
+<div class="post-header">
+    <h1>Soma</h1>
+    
+        <h3>Rewriting a Static Site Generator in Odin</h3>
+    
+    <p><time datetime="2026-02-05">Thursday, 5th February 2026</time></p>
+</div>
+<p>Soma is a lightweight static site generator (SSG) that I originally wrote in Python and later rewrote in Odin. It also happens to be the software responsible for building this website.</p>
+<p>The rewrite started as an opportunity to explore a language that was unfamiliar to me, particularly its approach to memory management, data structures and systems programming.</p>
+<p>Along the way, I found myself reconsidering some of my assumptions about software design, learning more about how web servers operate and discovering that seemingly simple features can involve surprising amounts of work.</p>
+<p>In the following, I talk about some of the decisions I found interesting, what I learned, and what I&#x27;d approach differently.</p>
+<h2>1. Why Odin?</h2>
+<p>I ended up choosing Odin for the rewrite for a few reasons. Mainly, I wanted to become more familiar with lower-level programming while still enjoying some modern language features. Odin appealed to me for its clean syntax, type inference, built-in string views and sensible approach to memory management through explicit <code>allocators</code> and <code>defer</code>. Rewriting Soma rather than starting something new also meant I could focus on learning the language while working with a problem I already understood.</p>
+<p>Coming from Python, one of the biggest adjustments was having to think more carefully about memory allocation, ownership and lifetime. Although I don&#x27;t handle this well currently in Soma, it was something at the very least I needed to consider.</p>
+<p>I also wanted to understand more of the machinery involved in serving a website. Writing my own HTTP server, rather than relying entirely on an existing framework, gave me an opportunity to explore what it actually means to serve content. In Python I only needed to write a line:</p>
+<pre><code class="language-python">python3 -m http.serve
+</code></pre>
+<p>And this was all you really needed. Whereas in Odin I needed to handle a lot more; sockets, accepting clients and handling headers. Everything was there for you to play around with! Very cool but also daunting.</p>
+<h2>2. Working with the filesystem and memory</h2>
+<h3>2.1 Walking directories</h3>
+<p>One small discovery that stuck with me involved Odin&#x27;s filesystem walker.</p>
+<p>While reading the documentation and exploring the language server&#x27;s autocomplete suggestions, I came across a useful function:</p>
+<pre><code>os.walker_skip_dir(&amp;w)
+</code></pre>
+<p>During a build, Soma traverses the site&#x27;s source directory to discover content. However, the generated build directory may also exist inside that directory. Rather than entering the build directory and checking every file to determine whether it should be ignored, I could skip the entire directory before descending into it.</p>
+<p>And look, this is probably not that significant to most of you. It&#x27;s a small optimisation, but one that made the intent of the code clearer and eliminated unnecessary filesystem traversal. But I still found it really interesting; the fact that people that built these tools and functions thought about many use cases users would need!</p>
+<p>Interestingly, this <strong>wasn&#x27;t something any of the LLM-generated suggestions I&#x27;d encountered had proposed.</strong> This is likely something to do with Odin being relatively sparse part of their training data. In any case, it was a useful reminder of the value of exploring a language&#x27;s standard library myself</p>
+<h3>2.2 Memory allocation and lifetime</h3>
+<p>Memory management was one of the biggest differences between the original Python version and the Odin rewrite.</p>
+<p>Throughout development, I frequently relied on <code>context.allocator</code>. This was convenient, particularly while I was still becoming familiar with the language, but it also meant I wasn&#x27;t always being deliberate about allocation lifetimes. In hindsight, I definitely should have thought more about allocation strategy earlier in the project.</p>
+<p>One possible improvement would be using arenas for particular operations, such as a complete build or intermediate rendering stages, where groups of allocations could be discarded together. The next time I work on this project, this is one of the first things I will be addressing.</p>
+<h2>3. Building the templating system</h2>
+<h3>3.1 Rebuilding rather than modifying</h3>
+<p>One interesting decision came up while implementing template inheritance.</p>
+<p>When resolving a child template, I needed to replace blocks in the parent template&#x27;s abstract syntax tree (AST) with the corresponding content from the child.</p>
+<p>One option was to modify the existing array of nodes directly, inserting and removing elements as necessary.</p>
+<p>For example, replacing part of:</p>
+<pre><code>[block_1, block_4, block_5]
+</code></pre>
+<p>with:</p>
+<pre><code>[block_1, block_2, block_3, block_4, block_5]
+</code></pre>
+<p>Instead, I opted to construct a new sequence of nodes during traversal. This avoided writing additional helpers for shifting and inserting elements into existing arrays. More importantly, I found the resulting code easier to follow and maintain.</p>
+<p>It was a useful example of how modifying an existing structure isn&#x27;t necessarily simpler than rebuilding it, even if rebuilding initially sounds less efficient.</p>
+<h3>3.2 Temporary data versus the registry</h3>
+<p>Another decision arose while implementing loop rendering in <code>_render_for</code>.</p>
+<p>Soma maintains a registry of page-level information that can be referenced during rendering. However, loops also introduce temporary variables representing the current item.</p>
+<pre><code>render_for(node, page, scope):
+    create child scope
+    parse loop variable and collection
+    resolve collection
 
-<p><time datetime="2026-01-19 00:00:00">Monday, 19th January, 2026</time></p>
-<h2>Introduction</h2>
-<p>A static site generator (SSG) is a tool that transforms structured content (such as Markdown) into HTML. This greatly reduces the time and effort required to maintain a static site. For more information, see <a href="https://www.cloudflare.com/en-au/learning/performance/static-site-generator/">this article.</a></p>
-<p>The motivation for this project really stemmed from my disdain in using others. Previously, I had used <a href="https://jekyllrb.com/">Jekyll</a>, and then <a href="https://www.getzola.org/">Zola</a>, but I found the features overkill for my needs. This lead me to creating my own.</p>
-<h2>How Soma Works</h2>
-<p><strong><em>Soma</em></strong> is discovery based and category agnostic. The only frontmatter required in each page is the title and template. The tool generates a few basic templates and site content to get you started, showcasing the basic layout expected so you can begin adjusting how you like. Any additional frontmatter (such as date) is accessible in the templates. Date being tricky as it is is supported natively and the default templates show how they can be used.</p>
-<p>Below I&rsquo;ve included a basic visualisation of what site structure is required for <strong><em>Soma</em></strong> to work. As you can see, it follows a fairly simple convention of root pages existing in the root dir and categories having their own index.md.</p>
-<div class="codehilite"><table class="codehilitetable"><tr><td class="linenos"><div class="linenodiv"><pre><span class="normal">1</span>
-<span class="normal">2</span>
-<span class="normal">3</span>
-<span class="normal">4</span>
-<span class="normal">5</span>
-<span class="normal">6</span>
-<span class="normal">7</span>
-<span class="normal">8</span>
-<span class="normal">9</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="n">new</span><span class="o">-</span><span class="n">soma</span><span class="o">/</span>                   
-    <span class="n">index</span><span class="o">.</span><span class="n">md</span>            <span class="c1"># Required</span>
-    <span class="n">contact</span><span class="o">.</span><span class="n">md</span>          
-    <span class="n">blog</span><span class="o">/</span>               
-        <span class="n">index</span><span class="o">.</span><span class="n">md</span>        <span class="c1"># Required    </span>
-        <span class="n">first</span><span class="o">-</span><span class="n">post</span><span class="o">.</span><span class="n">md</span>   
-    <span class="n">projects</span><span class="o">/</span>           
-        <span class="n">index</span><span class="o">.</span><span class="n">md</span>        <span class="c1"># Required  </span>
-        <span class="n">first</span><span class="o">-</span><span class="n">proj</span><span class="o">.</span><span class="n">md</span>
-</code></pre></div></td></tr></table></div>
+    if collection is undefined:
+        report error
 
-<p>An important feature of the SSG was the ability for templates to be able to automatically access items for each category. For instance, the blog index page should be able to show all blog posts (slices in future). <strong><em>Soma</em></strong> handles this for you, with each category template injected with <code>items</code>. The code block below showcases how to use this in the category template.</p>
-<blockquote>
-<p><code>{% for item in items | sort(attribute="rank") %}</code></p>
-</blockquote>
-<h2>1. Clean URLs: From <code>.html</code> to Folders</h2>
-<p>Shortly after I got the basic functionality working, the first thing I wanted to do was adjust the url structure of the category items.</p>
-<p>The initial implementation had links looking like follows.</p>
-<blockquote>
-<p><code>my-site.com/blog/first-post.html</code></p>
-</blockquote>
-<p>To be clear, there is nothing wrong with this. I just thought it&rsquo;d look nicer if the items were accessible without the .html extension so I could access items for each category at links like follows.</p>
-<blockquote>
-<p><code>my-site.com/blog/first-post</code></p>
-</blockquote>
-<p>Doing this was not too difficult. Most traditional static file web servers (such as Apache or Nginx) when processing a request at &lsquo;/&rsquo; look for a index.html file or something rather internally. i.e. <code>my-site.com/</code> resolves to the <code>index.html</code> sitting at the root. </p>
-<p>You can take a look at <a href="https://nginx.org/en/docs/http/ngx_http_index_module.html">ngix&rsquo;s implementation here</a> to see what I mean.</p>
-<p>This is also the case for folders within the build contents. So all we needed to do was adjust the build process to ensure each item is instead created as a directory, and within that the built html as <code>index.html</code>.</p>
-<h2>2. The Typing Dilemma</h2>
-<p>Initially when I created a few basic interfaces of the markdown pages I had setup rather strict requirements.</p>
-<div class="codehilite"><table class="codehilitetable"><tr><td class="linenos"><div class="linenodiv"><pre><span class="normal">1</span>
-<span class="normal">2</span>
-<span class="normal">3</span>
-<span class="normal">4</span>
-<span class="normal">5</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">MarkdownPageBase</span><span class="p">(</span><span class="n">TypedDict</span><span class="p">):</span>
-    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span>
-    <span class="n">template</span><span class="p">:</span> <span class="nb">str</span>
-    <span class="n">date</span><span class="p">:</span> <span class="nb">str</span>
-    <span class="n">content</span><span class="p">:</span> <span class="nb">str</span>
-</code></pre></div></td></tr></table></div>
+    for each item in collection:
+        bind item to loop variable in child scope
+        render loop body using child scope
+</code></pre>
+<p>Initially, I wondered whether these values should be stored in the registry as well. After some time, I realised they served a different purpose. Registry entries represent persistent page-level information, whereas loop variables are temporary/ephemeral and only meaningful within their rendering scope.</p>
+<p>Keeping them in local scope avoided unnecessarily expanding the registry and better reflected their intended lifetime. This also highlighted the importance of distinguishing data by its purpose rather than treating every accessible value as belonging to the same structure.</p>
+<h3>3.3. When is a helper worth writing?</h3>
+<p>A recurring question throughout the rewrite was whether small pieces of repeated logic justified their own helper functions. I often found myself choosing between creating another abstraction or leaving a small amount of duplication in place. I generally leaned towards keeping related logic together, particularly when introducing a helper would require jumping between functions to understand a relatively simple operation.</p>
+<p>I don&#x27;t think I&#x27;ve found the ideal balance yet. Repetition can make code harder to maintain, but abstraction also carries a cost, especially when it obscures the underlying behaviour.</p>
+<h2>4. Frontmatter, data models and errors</h2>
+<h3>4.1 Keeping frontmatter simple</h3>
+<p>Soma uses a YAML-inspired frontmatter format rather than implementing the entire YAML specification.</p>
+<p>It supports a small set of types:</p>
+<pre><code>Strings   &quot;Hello, world.&quot;
+Arrays    [&quot;Hello&quot;, &quot;, &quot;, &quot;world.&quot;]
+Integers  0-9
+Booleans  true, false
+Dates     2026-12-12
+</code></pre>
+<p>This covers the information I currently need to describe pages, such as their titles, templates, dates and tags.</p>
+<p>The main reason I decided against full YAML support was discovering just how complicated YAML parsing can be. I came across a <a href="https://x.com/TheGingerBill/status/1861401720581922832">Twitter post by gingerBill</a>, the creator of Odin, discussing the possibility of adding YAML support to the language. His comment <em>“its header file is over 9000 lines of code”</em> was enough to convince me that implementing a small subset of YAML was more than sufficient for Soma&#x27;s needs.</p>
+<h3>4.2 Defining types too early</h3>
+<p>During development, I noticed a tendency to introduce structures before I fully understood how the information would be used. Dates were one example. I began implementing my own representation for parsed dates, only to discover later that Odin already provided useful date-related functionality. In retrospect, I could have spent more time understanding the available standard library before designing my own solution.</p>
+<p>I also found myself tempted to reuse existing structures in places where they weren&#x27;t quite appropriate. For example, during the final stages of building a site, I considered reusing my Page type because it already contained much of the information I needed. However, several fields would have been unused or meaningless.</p>
+<p>I eventually introduced a separate Build_Context type. Although this meant having another structure, it more accurately represented the information required for that operation.</p>
+<p>These experiences made me reconsider when to introduce a new type and when to keep a simpler representation until the requirements become clearer.</p>
+<h3>4.3 Providing useful error messages</h3>
+<p>One problem I encountered was maintaining enough context to produce helpful error messages.</p>
+<p>When a failure occurred deep within frontmatter parsing or template processing, the function detecting the error didn&#x27;t necessarily know which source file was being processed. I considered introducing shared state to track the current file, avoiding the need to pass diagnostic information through several layers of functions.</p>
+<p>However, global state introduces its own problems, particularly when operations become more complex or need to run independently.</p>
+<p>This is something I will likely revisit at a later date.</p>
+<h2>5. Markdown and the little surprises</h2>
+<h3>5.1 Code blocks and syntax highlighting</h3>
+<p>Towards the end of the rewrite, I discovered that styling Markdown code blocks wasn&#x27;t quite as straightforward as I&#x27;d expected.</p>
+<p>Soma uses <code>md4c</code> to convert Markdown into HTML. For a fenced code block, the output looks roughly like this:</p>
+<pre><code class="language-html">&lt;pre&gt;&lt;code class=&quot;language-odin&quot;&gt;main :: proc() {
+    fmt.println(&amp;quot;hi&amp;quot;) // greet
+}
+&lt;/code&gt;&lt;/pre&gt;
+</code></pre>
+<p>This is perfectly reasonable HTML, but it doesn&#x27;t distinguish keywords, comments or other syntax elements. Initially, I explored post-processing these blocks myself. This involved traversing the generated HTML, identifying code blocks and inserting additional markup. However, syntax highlighting quickly becomes complicated once different programming languages and their individual syntax rules are involved.</p>
+<p>Rather than maintaining my own highlighting implementation, I eventually decided to use Highlight.js. It handles the language-specific work, while Soma remains responsible for generating the page itself.</p>
+<p>This was a good reminder that not every problem benefits from a custom implementation, particularly when the problem sits outside the project&#x27;s main purpose.</p>
+<h3>5.2 Typography and quotation marks</h3>
+<p>Another small surprise involved quotation marks.</p>
+<p>I wanted Markdown text to support typographic quotation marks, such as converting straight quotes into curly opening and closing quotes where appropriate. However, to my surprise, md4c doesn&#x27;t automatically perform this transformation.</p>
+<p>I considered adding an HTML post-processing step or switching to a Markdown implementation that supported this behaviour.. but for now, I&#x27;ve left it alone. It wasn&#x27;t worth introducing additional processing complexity for what is largely a presentational detail.</p>
+<p>Interestingly, both this and the code highlighting issue showed me how much work can sit behind seemingly trivial formatting features.</p>
+<h2>6. Reflections</h2>
+<p>Rewriting Soma in Odin has been a useful exercise in understanding what happens beneath the abstractions I was accustomed to working with in Python.</p>
+<p>I&#x27;ve had to think more carefully about memory, data lifetime, filesystem operations and how to organise internal structures without introducing unnecessary complexity.</p>
+<p>It&#x27;s also challenged my tendency to design abstractions too early. Several times, the simpler solution only became obvious after I&#x27;d spent time exploring something more complicated.</p>
+<p>Perhaps the biggest lesson has been that knowing what not to implement is just as important as knowing how to implement it.</p>
+<p>Soma remains a relatively small project, and that&#x27;s intentional. I want it to stay simple enough that I can understand and maintain it myself, while remaining useful for building this website.</p>
 
-<p>It later dawned on me while using the tool for my site that I don&rsquo;t really care what the frontmatter of each markdown pages is. All I really needed was the <code>template</code> and <code>title</code>. This could have been further simplified to just <code>template</code>.</p>
-<p>However as I began to flesh out more of the tools functionality I got lost in the weeds a little with union returns and such (due to certain pages requiring some fields and others not) which overall made the program unnecessarily messy.</p>
-<p>This led me to simplify the interface. The tool only requires that each markdown page contains in its frontmatter the <code>template</code> and the <code>title</code>. </p>
-<p>I am sure there are probably better ways of doing this. But given I wanted the tool to only be as &lsquo;complex as needed&rsquo; for each use case, I decided to make it very minimal.</p>
-<p>This is my second time working with typed items and its interesting. I really like the linting it provides and how I can be sure of somewhat expected behaviour. But I don&rsquo;t like how in a small project like this one I would need to likely create a separate class for a markdown page where date is required and I do not see the point in spending time to do this for this scale of project. Something to think about.</p>
-<p>Something else I was wondering. How much time I have spent thinking about type safety? Is this really the best use of my time? Sure, it may be more loosey goosey but why does it feel like I have contracted TypeScript.</p>
-<h2>3. Live Reload</h2>
-<p>Initially I had simply used the livereload module. But after some thought I felt there was a simpler solution. I also felt this was an opportunity to learn. </p>
-<p>After a little thought I decided to implement it like follows. Each time I build, I write to a file <code>.build-info.json</code> that contains the build time and hash. I also inject a script in dev mode into each page that contains a build hash. </p>
-<div class="codehilite"><table class="codehilitetable"><tr><td class="linenos"><div class="linenodiv"><pre><span class="normal">1</span>
-<span class="normal">2</span>
-<span class="normal">3</span>
-<span class="normal">4</span>
-<span class="normal">5</span>
-<span class="normal">6</span>
-<span class="normal">7</span>
-<span class="normal">8</span>
-<span class="normal">9</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="kd">const</span><span class="w"> </span><span class="nx">currentHash</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">document</span><span class="p">.</span><span class="nx">querySelector</span><span class="p">(</span><span class="s1">&#39;meta[name=&quot;build-hash&quot;]&#39;</span><span class="p">).</span><span class="nx">content</span><span class="p">;</span>
-<span class="w">    </span><span class="nx">setInterval</span><span class="p">(</span><span class="k">async</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
-<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">response</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">fetch</span><span class="p">(</span><span class="s1">&#39;/.build-info.json&#39;</span><span class="p">);</span>
-<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">buildInfo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">response</span><span class="p">.</span><span class="nx">json</span><span class="p">();</span>
-
-<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">buildInfo</span><span class="p">.</span><span class="nx">hash</span><span class="w"> </span><span class="o">!==</span><span class="w"> </span><span class="nx">currentHash</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
-<span class="w">            </span><span class="nx">location</span><span class="p">.</span><span class="nx">reload</span><span class="p">();</span>
-<span class="w">        </span><span class="p">}</span>
-<span class="w">    </span><span class="p">},</span><span class="w"> </span><span class="mf">1000</span><span class="p">);</span>
-</code></pre></div></td></tr></table></div>
-
-<p>As you can see above, it is fairly straightforward. Every second I check to see if the build hash on the page matches that of the build hash in the written file. If we detect a difference, we refresh the page.</p>
-<p>There&rsquo;s obviously a lot of room for improvement here. The next logical step would be to build out a data structure to manage the state of each page and its dependencies to optimise the live reload but that would require a lot more work and I think I got out of it what I wanted in avoiding using livereload and a websocket in the first place.</p>
-<h2>4. File Paths</h2>
-<p>During implementation, an interesting technical challenge I faced was how to ensure I copy assets over to new instances in different environments. If I used standard filesystem paths such as <code>~/Lab/soma/fonts</code>, the Python package might be distributed in a variety of formats where the files may not exist as regular filesystem objects at runtime. The code below demonstrates a little more clearly.</p>
-<div class="codehilite"><table class="codehilitetable"><tr><td class="linenos"><div class="linenodiv"><pre><span class="normal">1</span>
-<span class="normal">2</span>
-<span class="normal">3</span>
-<span class="normal">4</span>
-<span class="normal">5</span>
-<span class="normal">6</span>
-<span class="normal">7</span>
-<span class="normal">8</span>
-<span class="normal">9</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">copy_default_fonts</span><span class="p">(</span><span class="n">font_path</span><span class="p">:</span> <span class="n">Path</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Copy default fonts from package&quot;&quot;&quot;</span>
-    <span class="k">try</span><span class="p">:</span>
-        <span class="k">with</span> <span class="n">resources</span><span class="o">.</span><span class="n">as_file</span><span class="p">(</span><span class="n">resources</span><span class="o">.</span><span class="n">files</span><span class="p">(</span><span class="s1">&#39;soma.fonts&#39;</span><span class="p">))</span> <span class="k">as</span> <span class="n">font_dir</span><span class="p">:</span>
-            <span class="k">for</span> <span class="n">font</span> <span class="ow">in</span> <span class="n">font_dir</span><span class="o">.</span><span class="n">iterdir</span><span class="p">():</span>
-                <span class="k">if</span> <span class="n">font</span><span class="o">.</span><span class="n">is_file</span><span class="p">():</span>
-                    <span class="n">shutil</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">font</span><span class="p">,</span> <span class="n">font_path</span> <span class="o">/</span> <span class="n">font</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
-    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;soma (error: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</code></pre></div></td></tr></table></div>
-
-<p>If you take a look at line 4 you will see <code>resources.as_file</code> being called. By using this approach instead of a filesystem path we ensure that the resources can be reliably accessed regardless of how the package is installed or executed.</p>
-<h2>5. Development Process w/ LLM&rsquo;s</h2>
-<p>During the initial development of this tool I consulted with a few LLM&rsquo;s to get an idea of what the project should look like. This helped greatly. I did have a look at a few existing repo&rsquo;s but most were extremely extensive and complicated (to me) pieces of software. Using the LLM&rsquo;s I was able to extract the common denominator operations my SSG should perform and from there I was able to implement each part as I liked.</p>
-<p>Something I did notice that bugged me however was the LLM&rsquo;s tendency to couple everything really tightly. I can see how this is quite efficient, but to me it didn&rsquo;t seem very readable/understandable. I started to instead when encountering rather troublesome bugs to just ask it to provide a text response to the problem areas so I could make better sense of the problem myself. I do not want to waste time learning how the LLM wrote a complicated solution to something that in reality was pretty simple to fix.</p>
-<h2>6. Project Structure</h2>
-<p>Recently I&rsquo;ve noticed a trend towards keeping all your code within as few files as possible. I was pretty against this early days in my programming journey but the more I try to adhere to this the more sense it makes. Whenever I need to find a function I simply CTRL-F and I know its somewhere in the file. It&rsquo;s also allegedly faster although I am yet to test this for myself. I think I used to over modularise. I still split out things as needed, but only when I feel it absolutely necessary.</p>
-<h2>Summary</h2>
-<p>This project was an excellent exercise for myself to get more familiar with web technologies, tooling and python. Some other unexpected discoveries along the way such as how I interact with LLM&rsquo;s and what my development process is like were welcome.</p>
-<p>In future, I will port this to C for speed and to get more familiar with C. From here I will look to optimising build and providing slices to items for categories for larger, more complex sites.</p>
 
     </div>
     <footer>
         <p>Nobody ever figures out what life is all about, and it doesn't matter. Explore the world. Nearly everything is really interesting if you go into it deeply enough. — Richard P. Feynman</p>
     </footer>
-    
-</body>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.12.0/build/highlight.min.js"></script>
+    <script>
+        hljs.highlightAll();
+    </script>
+<script>
+(function () {
+    let knownGen = null;
+    async function checkForRebuild() {
+        try {
+            const response = await fetch("/soma-reload", { cache: "no-store" });
+            const currentGen = await response.text();
+
+            if (knownGen === null) {
+                knownGen = currentGen;
+            } else if (knownGen !== currentGen) {
+                location.reload();
+            }
+        } catch {} 
+    }
+    checkForRebuild();
+    setInterval(checkForRebuild, 1000);
+})();
+</script></body>
 </html>

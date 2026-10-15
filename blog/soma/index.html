@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My first real project, Soma.</title>
+    <link rel="stylesheet" href="/assets/css/style.css">
+    <link rel="stylesheet" href="/assets/css/pygments.css">
+    <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.12.0/build/styles/grayscale.min.css"
+    >
+</head>
+<body>
+    <nav>
+        <a href="/">Home</a>
+        <a href="/blog/">Blog</a>
+        <a href="/projects/">Projects</a>
+        <a href="/about">About</a>
+    </nav>
+    <div class="content">
+        
+<div class="post-header">
+    <h1>My first real project, Soma.</h1>
+    
+        <h3>A journey in static site engineering</h3>
+    
+    <p><time datetime="2026-01-19">Monday, 19th January 2026</time></p>
+</div>
+<p>This writeup details my experience writing Soma. Since then, I&#x27;ve re-written the program in Odin in hopes of learning more about memory management, nuanced data structures and templating engine semantics.</p>
+<h2>Introduction</h2>
+<p>A static site generator (SSG) is a tool that transforms structured content (such as Markdown) into HTML. This greatly reduces the time and effort required to maintain a static site. For more information, see <a href="https://www.cloudflare.com/en-au/learning/performance/static-site-generator/">this article.</a></p>
+<p>The motivation for this project really stemmed from my disdain in using others. Previously, I had used <a href="https://jekyllrb.com/">Jekyll</a>, and then <a href="https://www.getzola.org/">Zola</a>, but I found the features overkill for my needs. This lead me to creating my own.</p>
+<h2>How Soma Works</h2>
+<p><em><strong>Soma</strong></em> is discovery based and category agnostic. The only frontmatter required in each page is the title and template. The tool generates a few basic templates and site content to get you started, showcasing the basic layout expected so you can begin adjusting how you like. Any additional frontmatter (such as date) is accessible in the templates. Date being tricky as it is is supported natively and the default templates show how they can be used.</p>
+<p>Below I&#x27;ve included a basic visualisation of what site structure is required for <em><strong>Soma</strong></em> to work. As you can see, it follows a fairly simple convention of root pages existing in the root dir and categories having their own index.md.</p>
+<pre><code class="language-python">new-soma/                   
+    index.md            # Required
+    contact.md          
+    blog/               
+        index.md        # Required    
+        first-post.md   
+    projects/           
+        index.md        # Required  
+        first-proj.md
+</code></pre>
+<p>An important feature of the SSG was the ability for templates to be able to automatically access items for each category. For instance, the blog index page should be able to show all blog posts (slices in future). <em><strong>Soma</strong></em> handles this for you, with each category template injected with <code>items</code>. The code block below showcases how to use this in the category template.</p>
+<blockquote>
+<p><code>{% for item in items | sort(attribute=&quot;rank&quot;) %}</code></p>
+</blockquote>
+<h2>1. Clean URLs: From <code>.html</code> to Folders</h2>
+<p>Shortly after I got the basic functionality working, the first thing I wanted to do was adjust the url structure of the category items.</p>
+<p>The initial implementation had links looking like follows.</p>
+<blockquote>
+<p><code>my-site.com/blog/first-post.html</code></p>
+</blockquote>
+<p>To be clear, there is nothing wrong with this. I just thought it&#x27;d look nicer if the items were accessible without the .html extension so I could access items for each category at links like follows.</p>
+<blockquote>
+<p><code>my-site.com/blog/first-post</code></p>
+</blockquote>
+<p>Doing this was not too difficult. Most traditional static file web servers (such as Apache or Nginx) when processing a request at &#x27;/&#x27; look for a index.html file or something rather internally. i.e. <code>my-site.com/</code> resolves to the <code>index.html</code> sitting at the root.</p>
+<p>You can take a look at <a href="https://nginx.org/en/docs/http/ngx_http_index_module.html">ngix&#x27;s implementation here</a> to see what I mean.</p>
+<p>This is also the case for folders within the build contents. So all we needed to do was adjust the build process to ensure each item is instead created as a directory, and within that the built html as <code>index.html</code>.</p>
+<h2>2. The Typing Dilemma</h2>
+<p>Initially when I created a few basic interfaces of the markdown pages I had setup rather strict requirements.</p>
+<pre><code class="language-python">class MarkdownPageBase(TypedDict):
+    title: str
+    template: str
+    date: str
+    content: str
+</code></pre>
+<p>It later dawned on me while using the tool for my site that I don&#x27;t really care what the frontmatter of each markdown pages is. All I really needed was the <code>template</code> and <code>title</code>. This could have been further simplified to just <code>template</code>.</p>
+<p>However as I began to flesh out more of the tools functionality I got lost in the weeds a little with union returns and such (due to certain pages requiring some fields and others not) which overall made the program unnecessarily messy.</p>
+<p>This led me to simplify the interface. The tool only requires that each markdown page contains in its frontmatter the <code>template</code> and the <code>title</code>.</p>
+<p>I am sure there are probably better ways of doing this. But given I wanted the tool to only be as &#x27;complex as needed&#x27; for each use case, I decided to make it very minimal.</p>
+<p>This is my second time working with typed items and its interesting. I really like the linting it provides and how I can be sure of somewhat expected behaviour. But I don&#x27;t like how in a small project like this one I would need to likely create a separate class for a markdown page where date is required and I do not see the point in spending time to do this for this scale of project. Something to think about.</p>
+<p>Something else I was wondering. How much time I have spent thinking about type safety? Is this really the best use of my time? Sure, it may be more loosey goosey but why does it feel like I have contracted TypeScript.</p>
+<h2>3. Live Reload</h2>
+<p>Initially I had simply used the livereload module. But after some thought I felt there was a simpler solution. I also felt this was an opportunity to learn.</p>
+<p>After a little thought I decided to implement it like follows. Each time I build, I write to a file <code>.build-info.json</code> that contains the build time and hash. I also inject a script in dev mode into each page that contains a build hash.</p>
+<pre><code class="language-javascript">const currentHash = document.querySelector(&#x27;meta[name=&quot;build-hash&quot;]&#x27;).content;
+    setInterval(async () =&gt; {
+        const response = await fetch(&#x27;/.build-info.json&#x27;);
+        const buildInfo = await response.json();
+        
+        if (buildInfo.hash !== currentHash) {
+            location.reload();
+        }
+    }, 1000);
+</code></pre>
+<p>As you can see above, it is fairly straightforward. Every second I check to see if the build hash on the page matches that of the build hash in the written file. If we detect a difference, we refresh the page.</p>
+<p>There&#x27;s obviously a lot of room for improvement here. The next logical step would be to build out a data structure to manage the state of each page and its dependencies to optimise the live reload but that would require a lot more work and I think I got out of it what I wanted in avoiding using livereload and a websocket in the first place.</p>
+<h2>4. File Paths</h2>
+<p>During implementation, an interesting technical challenge I faced was how to ensure I copy assets over to new instances in different environments. If I used standard filesystem paths such as <code>~/Lab/soma/fonts</code>, the Python package might be distributed in a variety of formats where the files may not exist as regular filesystem objects at runtime. The code below demonstrates a little more clearly.</p>
+<pre><code class="language-python">def copy_default_fonts(font_path: Path):
+    &quot;&quot;&quot;Copy default fonts from package&quot;&quot;&quot;
+    try:
+        with resources.as_file(resources.files(&#x27;soma.fonts&#x27;)) as font_dir:
+            for font in font_dir.iterdir():
+                if font.is_file():
+                    shutil.copy(font, font_path / font.name)
+    except Exception as e:
+        print(f&quot;soma (error: {e}&quot;)
+</code></pre>
+<p>If you take a look at line 4 you will see <code>resources.as_file</code> being called. By using this approach instead of a filesystem path we ensure that the resources can be reliably accessed regardless of how the package is installed or executed.</p>
+<h2>5. Development Process w/ LLM&#x27;s</h2>
+<p>During the initial development of this tool I consulted with a few LLM&#x27;s to get an idea of what the project should look like. This helped greatly. I did have a look at a few existing repo&#x27;s but most were extremely extensive and complicated (to me) pieces of software. Using the LLM&#x27;s I was able to extract the common denominator operations my SSG should perform and from there I was able to implement each part as I liked.</p>
+<p>Something I did notice that bugged me however was the LLM&#x27;s tendency to couple everything really tightly. I can see how this is quite efficient, but to me it didn&#x27;t seem very readable/understandable. I started to instead when encountering rather troublesome bugs to just ask it to provide a text response to the problem areas so I could make better sense of the problem myself. I do not want to waste time learning how the LLM wrote a complicated solution to something that in reality was pretty simple to fix.</p>
+<h2>6. Project Structure</h2>
+<p>Recently I&#x27;ve noticed a trend towards keeping all your code within as few files as possible. I was pretty against this early days in my programming journey but the more I try to adhere to this the more sense it makes. Whenever I need to find a function I simply CTRL-F and I know its somewhere in the file. It&#x27;s also allegedly faster although I am yet to test this for myself. I think I used to over modularise. I still split out things as needed, but only when I feel it absolutely necessary.</p>
+<h2>Summary</h2>
+<p>This project was an excellent exercise for myself to get more familiar with web technologies, tooling and python. Some other unexpected discoveries along the way such as how I interact with LLM&#x27;s and what my development process is like were welcome.</p>
+<p>In future, I will port this to C for speed and to get more familiar with C. From here I will look to optimising build and providing slices to items for categories for larger, more complex sites.</p>
+
+
+    </div>
+    <footer>
+        <p>Nobody ever figures out what life is all about, and it doesn't matter. Explore the world. Nearly everything is really interesting if you go into it deeply enough. — Richard P. Feynman</p>
+    </footer>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.12.0/build/highlight.min.js"></script>
+    <script>
+        hljs.highlightAll();
+    </script>
+<script>
+(function () {
+    let knownGen = null;
+    async function checkForRebuild() {
+        try {
+            const response = await fetch("/soma-reload", { cache: "no-store" });
+            const currentGen = await response.text();
+
+            if (knownGen === null) {
+                knownGen = currentGen;
+            } else if (knownGen !== currentGen) {
+                location.reload();
+            }
+        } catch {} 
+    }
+    checkForRebuild();
+    setInterval(checkForRebuild, 1000);
+})();
+</script></body>
+</html>

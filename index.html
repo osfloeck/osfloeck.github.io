@@ -1,12 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="build-hash" content="a6f81148c5f2">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>floeckdev</title>
     <link rel="stylesheet" href="/assets/css/style.css">
     <link rel="stylesheet" href="/assets/css/pygments.css">
+    <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.12.0/build/styles/grayscale.min.css"
+    >
 </head>
 <body>
     <nav>
@@ -18,17 +21,39 @@
     <div class="content">
         
 <h1>floeckdev</h1>
-<p>This site hosts my project portfolio and technical blog where I document what I&rsquo;m learning and building. Explore the work, and feel free to connect.</p>
+<p>This site hosts my project portfolio and technical blog where I document what I&#x27;m learning and building. Explore the work, and feel free to connect.</p>
 <ul>
 <li>LinkedIn: <a href="https://www.linkedin.com/in/floeck">linkedin.com/in/floeck</a></li>
-<li>Email: <a href="mailto:oskar@floeckdev.org">oskar@floeckdev.org</a></li>
-<li>Github: <a href="https://github.com/floeckdev">github.com/floeckdev</a></li>
+<li>Email: <a href="mailto:oskar@floeck.dev">oskar@floeck.dev</a></li>
+<li>Github: <a href="https://github.com/osfloeck">github.com/osfloeck</a></li>
 </ul>
+
 
     </div>
     <footer>
         <p>Nobody ever figures out what life is all about, and it doesn't matter. Explore the world. Nearly everything is really interesting if you go into it deeply enough. — Richard P. Feynman</p>
     </footer>
-    
-</body>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.12.0/build/highlight.min.js"></script>
+    <script>
+        hljs.highlightAll();
+    </script>
+<script>
+(function () {
+    let knownGen = null;
+    async function checkForRebuild() {
+        try {
+            const response = await fetch("/soma-reload", { cache: "no-store" });
+            const currentGen = await response.text();
+
+            if (knownGen === null) {
+                knownGen = currentGen;
+            } else if (knownGen !== currentGen) {
+                location.reload();
+            }
+        } catch {} 
+    }
+    checkForRebuild();
+    setInterval(checkForRebuild, 1000);
+})();
+</script></body>
 </html>
